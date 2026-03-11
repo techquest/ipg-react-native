@@ -3,7 +3,7 @@ import { View, StyleSheet, Text, TouchableOpacity, Alert } from 'react-native';
 import {
   IswPaymentWebView,
   type IswWebViewRefMethods,
-} from 'react-native-interswitch-pay';
+} from '@interswitchapi/ipg-react-native';
 
 export default function App() {
   const webRef = useRef<IswWebViewRefMethods>(null);
