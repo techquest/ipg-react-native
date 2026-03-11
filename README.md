@@ -1,302 +1,185 @@
-# react-native-interswitch-pay
+# Interswitch Payment Gateway SDK for React Native
 
-<img width="459" alt="Interswitch" src="https://github.com/user-attachments/assets/1450262e-2ae9-4ec3-ac74-31fe50655b49">
+<img width="259" alt="Interswitch" src="https://business.quickteller.com/assets/images/app-logo.svg">
 
-The Interswitch React Native SDK simplifies the integration of the Interswitch Payment Gateway (IPG) into your React Native app using a WebView component.
+The **Interswitch Payment Gateway (IPG) SDK** for React Native provides a seamless way to integrate secure payment processing into your mobile applications. Built on top of the robust Interswitch Web Checkout, this SDK simplifies the integration process using a high-performance WebView component.
 
-[demo](https://www.loom.com/share/a368f65a0b2641b69e4fce1d74fcbbd8)
-
-## Features
-
-- Flexible implementation following the [official documentation](https://docs.interswitchgroup.com/docs/web-checkout).
-- Integrated with the [ Inline Checkout](https://docs.interswitchgroup.com/docs/web-checkout#option-1---inline-checkout).
-- Built with TypeScript for type safety and an enhanced developer experience.
-- Supports both Expo and React Native CLI.
-
-## Installation
-
-##### Npm
-
-```sh
-npm install react-native-interswitch-pay
-```
-
-##### Yarn
-
-```sh
-yarn  react-native-interswitch-pay
-```
-
-##### Expo
-
-```sh
-expo  install react-native-interswitch-pay
-```
-
-> **_Important_**: This package depends on `react-native-webview` as a peer dependency and requires it for proper functionality.
-
-## Quick Examples.
-
-#### Auto start Payment
-
-```js
-import { useRef, useState } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Alert } from 'react-native';
-import {
-  IswPaymentWebView,
-  type IswWebViewRefMethods,
-} from 'react-native-interswitch-pay';
-
-export default function App() {
-  const [txnRef, setTxnRef] = useState(`txn_${Date.now()}`);
-
-  const isw = {
-    merchantCode: 'MX6072',
-    payItemId: '9405967',
-    transactionRef: txnRef,
-    amount: 100000,
-    currency: '566',
-    mode: 'TEST',
-  };
-
-  return (
-    <View style={styles.container}>
-      <Text style={styles.text}>Interswitch Payment Gateway</Text>
-      <IswPaymentWebView
-        amount={isw.amount}
-        autoStart={true}
-        trnxRef={txnRef}
-        showBackdrop={false}
-        mode={isw.mode as any}
-        merchantCode={isw.merchantCode}
-        payItem={{ id: isw.payItemId }}
-        style={styles.webViewStyle}
-        onCompleted={(response) => {
-          console.log('Response', response);
-        }}
-      />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingTop: 40,
-    paddingHorizontal: 24,
-  },
-  text: {
-    textAlign: 'center',
-    marginTop: 40,
-    fontSize: 20,
-  },
-  webViewStyle: {
-    marginTop: '10%',
-  },
-});
-
-```
-
-#### Use with custom WebPay Callback Response payload.
-
-```js
-import { useRef, useState } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Alert } from 'react-native';
-import {
-  IswPaymentWebView,
-  type IswWebViewRefMethods,
-} from 'react-native-interswitch-pay';
-
-
-interface CustomData {
-  userId: string;
-  orderId: number;
-  cardProductionBin: string;
-}
-
-export default function App() {
- // rest of the code.
-
-  const isw = {
-    merchantCode: 'MX6072',
-    payItemId: '9405967',
-    transactionRef: txnRef,
-    amount: 100000,
-    currency: '566',
-    mode: 'TEST',
-  };
-
-  return (
-    <View style={styles.container}>
-      <Text style={styles.text}>Interswitch Payment Gateway</Text>
-      <TouchableOpacity style={styles.button} onPress={handleStartPayment}>
-        <Text style={styles.buttonText}>Start Payment</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.button, styles.stopButton]}
-        onPress={() => webRef.current?.end()}
-      >
-        <Text style={styles.buttonText}>Stop Payment</Text>
-      </TouchableOpacity>
-      <IswPaymentWebView<CustomData>
-        ref={webRef}
-        amount={isw.amount}
-        autoStart={false}
-        trnxRef={txnRef}
-        showBackdrop={false}
-        mode={isw.mode as any}
-        merchantCode={isw.merchantCode}
-        payItem={{ id: isw.payItemId }}
-        style={styles.webViewStyle}
-        onCompleted={(response) => {
-          console.log('Response', response);
-          console.log('Custom Response Data:', response.cardProductionBin);
-        }}
-      />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
- // styles
-});
-
-```
-
-#### Use with Ref to trigger using a button
-
-```js
-import { useRef, useState } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, Alert } from 'react-native';
-import {
-  IswPaymentWebView,
-  type IswWebViewRefMethods,
-} from 'react-native-interswitch-pay';
-
-export default function App() {
-  const webRef = useRef<IswWebViewRefMethods>(null);
-  const [txnRef, setTxnRef] = useState(`txn_${Date.now()}`);
-
-  const handleStartPayment = () => {
-    try {
-      const newTxnRef = `txn_${Date.now()}`;
-      setTxnRef(newTxnRef);
-
-      // Added this delay for Test purposes, so you can test multiple times
-      setTimeout(() => {
-        webRef.current?.start();
-      }, 100);
-    } catch (error) {
-      Alert.alert('Validation Error', (error as Error).message);
-    }
-  };
-
-  const isw = {
-    merchantCode: 'MX6072',
-    payItemId: '9405967',
-    transactionRef: txnRef,
-    amount: 100000,
-    currency: '566',
-    mode: 'TEST',
-  };
-
-  return (
-    <View style={styles.container}>
-      <Text style={styles.text}>Interswitch Payment Gateway</Text>
-      <TouchableOpacity style={styles.button} onPress={handleStartPayment}>
-        <Text style={styles.buttonText}>Start Payment</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.button, styles.stopButton]}
-        onPress={() => webRef.current?.end()}
-      >
-        <Text style={styles.buttonText}>Stop Payment</Text>
-      </TouchableOpacity>
-      <IswPaymentWebView
-        ref={webRef}
-        amount={isw.amount}
-        autoStart={false}
-        trnxRef={txnRef}
-        showBackdrop={false}
-        mode={isw.mode as any}
-        merchantCode={isw.merchantCode}
-        payItem={{ id: isw.payItemId }}
-        style={styles.webViewStyle}
-        onCompleted={(response) => {
-          console.log('Response', response);
-        }}
-      />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingTop: 40,
-    paddingHorizontal: 24,
-  },
-  text: {
-    textAlign: 'center',
-    marginTop: 40,
-    fontSize: 20,
-  },
-  title: {
-    fontSize: 18,
-    marginBottom: 20,
-    fontWeight: 'bold',
-  },
-  button: {
-    marginTop: '20%',
-    backgroundColor: '#007bff',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-  },
-  stopButton: {
-    backgroundColor: '#dc3545',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-  },
-  webViewStyle: {
-    marginTop: '10%',
-  },
-});
-
-```
-
-
-### Props
-
-| Props Name           | Description                                           | Required | Value             | Data type |
-| -------------------- | ----------------------------------------------------- | -------- | ----------------- | --------- |
-| trnxRef | transaction reference.                                | Yes      |                   | string    |
-| merchantCode         | ISW merchant code                                     | Yes      |                   | string    |
-| amount               | Cost of the item you want your customer to pay in Kobo e.g amount * 100       | Yes      |                   | number    |
-| customer             | Customer information e.g email, first name, last name | No       |                   | object    |
-| payItem              | Payment Item e.g id and name                          | Yes      |                   | object[]  |
-| autoStart            | To auto initialize transaction                        | No       | false             | boolean   |
-| indicatorColor       | activity indicator color                              | No       | red               | string    |
-| currency             | ISO currency code e.g 566                             | Yes      | e.g 566           | number    |
-| mode                 | Environment e.g LIVE, TEST                            | Yes      | TEST              | string    |
-| onCompleted          | Callback that triggers when webview close or cancels  | Yes      |                   | Function  |
-| splitAccounts        | ISW Split accounts for settlements                    | No       | `SplitAccounts[]` | Array     |
-| showBackdrop        | Display loading backdrop                     | No       | false | boolean     |
-| style        | WebView component custom style                   | No       | object | ViewStyle     |
-
-| backButton        | custom back button style                   | No       | undefined | React Node      |
-
-
-## Contributing
-
-See the [contributing guide](CONTRIBUTING.md) to learn how to contribute to the repository and the development workflow.
-
-## License
-
-MIT
+[Official Documentation](https://docs.interswitchgroup.com/docs/web-checkout)
 
 ---
 
-Made with [create-react-native-library](https://github.com/callstack/react-native-builder-bob)
+## Features
+
+- **Official Integration**: Follows [Interswitch Inline Checkout](https://docs.interswitchgroup.com/docs/web-checkout#option-1---inline-checkout) standards.
+- **Cross-Platform**: Full support for both **Expo** and **React Native CLI**.
+- **Type Safety**: Built with **TypeScript** for a superior developer experience and fewer runtime errors.
+- **Customizable**: Control the payment flow with refs, handle custom response data, and style the UI to match your app.
+
+## Installation
+
+Install the package via your preferred package manager:
+
+### NPM
+
+```sh
+npm install @interswitchapi/ipg-react-native
+```
+
+### Yarn
+
+```sh
+yarn add @interswitchapi/ipg-react-native
+```
+
+### Expo
+
+```sh
+npx expo install @interswitchapi/ipg-react-native
+```
+
+> [!IMPORTANT]
+> This package requires `react-native-webview` as a peer dependency. Ensure it is installed in your project.
+
+---
+
+## Quick Start
+
+The following example demonstrates a basic implementation where the payment modal starts automatically.
+
+```tsx
+import React, { useState } from 'react';
+import { View, StyleSheet, Text } from 'react-native';
+import { IswPaymentWebView } from '@interswitchapi/ipg-react-native';
+
+export default function App() {
+  const [txnRef] = useState(`txn_${Date.now()}`);
+
+  const config = {
+    merchantCode: 'MX6072',
+    payItemId: '9405967',
+    amount: 100000, // Amount in Kobo (e.g., 1000.00 NGN)
+    mode: 'TEST' as const,
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Secure Payment</Text>
+      <IswPaymentWebView
+        amount={config.amount}
+        autoStart={true}
+        trnxRef={txnRef}
+        merchantCode={config.merchantCode}
+        payItem={{ id: config.payItemId }}
+        mode={config.mode}
+        onCompleted={(response) => {
+          console.log('Payment Response:', response);
+        }}
+        style={styles.webView}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, paddingTop: 60, paddingHorizontal: 20 },
+  title: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  webView: { flex: 1 },
+});
+```
+
+---
+
+## Advanced Usage
+
+### Manual Trigger with Refs
+
+Use the `IswWebViewRefMethods` to programmatically `start()` or `end()` the payment process.
+
+```tsx
+import React, { useRef } from 'react';
+import { TouchableOpacity, Text } from 'react-native';
+import {
+  IswPaymentWebView,
+  type IswWebViewRefMethods,
+} from '@interswitchapi/ipg-react-native';
+
+export default function PaymentScreen() {
+  const paymentRef = useRef<IswWebViewRefMethods>(null);
+
+  return (
+    <>
+      <TouchableOpacity onPress={() => paymentRef.current?.start()}>
+        <Text>Pay Now</Text>
+      </TouchableOpacity>
+
+      <IswPaymentWebView
+        ref={paymentRef}
+        autoStart={false}
+        // ... other props
+        onCompleted={(res) => console.log(res)}
+      />
+    </>
+  );
+}
+```
+
+### Handling Custom Response Data
+
+You can pass a generic type to `IswPaymentWebView` to handle custom data fields returned in the payment callback.
+
+```tsx
+interface MyCustomData {
+  orderId: string;
+  userId: string;
+}
+
+// ... inside your component
+<IswPaymentWebView<MyCustomData>
+  onCompleted={(response) => {
+    console.log('Order ID:', response.orderId);
+  }}
+  // ...
+/>;
+```
+
+---
+
+## API Reference: Props
+
+| Prop             | Type                | Required | Default | Description                                                 |
+| :--------------- | :------------------ | :------: | :------ | :---------------------------------------------------------- |
+| `trnxRef`        | `string`            | **Yes**  | -       | Unique transaction reference for the session.               |
+| `merchantCode`   | `string`            | **Yes**  | -       | Your Interswitch Merchant Code.                             |
+| `amount`         | `number \| string`  | **Yes**  | -       | Transaction amount in **Kobo** (e.g., `100000` = 1000.00).  |
+| `payItem`        | `IswPayItem`        | **Yes**  | -       | Object containing `id` (required) and `name` (optional).    |
+| `mode`           | `'TEST' \| 'LIVE'`  | **Yes**  | -       | Environment for the transaction.                            |
+| `onCompleted`    | `Function`          | **Yes**  | -       | Callback triggered upon completion, cancellation, or error. |
+| `currency`       | `number \| string`  |    No    | `566`   | ISO currency code (Default: 566 for NGN).                   |
+| `customer`       | `IswCustomer`       |    No    | -       | Optional customer details (id, name, email, phoneNumber).   |
+| `autoStart`      | `boolean`           |    No    | `false` | Automatically launch the payment modal on mount.            |
+| `showBackdrop`   | `boolean`           |    No    | `false` | Display a loading backdrop while the gateway initializes.   |
+| `indicatorColor` | `ColorValue`        |    No    | -       | Color for the loading activity indicator.                   |
+| `loadingText`    | `string`            |    No    | -       | Custom text displayed during initialization.                |
+| `style`          | `ViewStyle`         |    No    | -       | custom styles for the WebView component.                    |
+| `backButton`     | `ReactNode`         |    No    | -       | Custom component for the back/close button.                 |
+| `tokeniseCard`   | `'true' \| 'false'` |    No    | -       | Flag to request card tokenization for future use.           |
+| `splitAccounts`  | `SplitAccounts[]`   |    No    | -       | Array of accounts for settlement splitting.                 |
+
+---
+
+## Contributing
+
+We welcome contributions! Please see the [Contributing Guide](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+_Built with [create-react-native-library](https://github.com/callstack/react-native-builder-bob)_
