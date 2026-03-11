@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Interswitch WebPay</title>
+</head>
+
+<body>
+  <p id="statusText" style="text-align: center; margin-top: 1rem;">Please wait....</p>
+  <div style="text-align: center; margin-top: 2rem;">
+    <button id="fallbackButton" onclick="redirectBackToApp()" style="
+        display: block;
+        padding: 0.75rem 1.5rem;
+        background-color: white;
+        color: black;
+        border: 2px solid black;
+        border-radius: 4px;
+        font-size: 1rem;
+        cursor: pointer;
+        margin: auto;
+        margin-top: 25%;
+      ">
+      Cancel
+    </button>
+    <script>
+      function getQueryParams() {
+        const params = {};
+        window.location.search
+          .substring(1)
+          .split('&')
+          .forEach(function (param) {
+            const [key, value] = param.split('=');
+            if (key && value !== undefined) {
+              params[key] = decodeURIComponent(value);
+            }
+          });
+        return params;
+      }
+
+
+      function redirectBackToApp() {
+        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'PAYMENT_MODAL_TERMINATED',
+            data: null
+          }));
+        }
+      }
+
+      function loadScript(src, callback) {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = callback;
+        script.onerror = function () {
+          document.body.innerHTML = `<p style="color:red;text-align:center;margin-top:2rem;">Failed to load payment script.</p>`;
+
+        };
+        document.head.appendChild(script);
+      }
+
+      function paymentCallback(response) {
+        console.log('Payment callback:', response);
+
+        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'PAYMENT_RESPONSE',
+            data: response
+          }));
+        }
+      }
+
+      const params = getQueryParams();
+      const mode = (params?.mode || 'TEST').toUpperCase();
+
+      const scriptUrl = mode === 'LIVE'
+        ? 'https://newwebpay.interswitchng.com/inline-checkout.js'
+        : 'https://newwebpay.qa.interswitchng.com/inline-checkout.js';
+
+
+      loadScript(scriptUrl, () => {
+        const paymentRequest = {
+          mode,
+          pay_item_id: params?.pay_item_id,
+          txn_ref: params?.txn_ref,
+          amount: Number(params?.amount),
+          currency: Number(params?.currency),
+          merchant_code: params?.merchant_code,
+          site_redirect_url: 'https://blank.org',
+          onComplete: paymentCallback,
+        };
+
+        if (params.cust_name) paymentRequest.cust_name = params.cust_name;
+        if (params.cust_email) paymentRequest.cust_email = params.cust_email;
+        if (params.cust_id) paymentRequest.cust_id = params.cust_id;
+        if (params.cust_mobile_no) paymentRequest.cust_mobile_no = params.cust_mobile_no;
+        if (params.tokenise_card) paymentRequest.tokenise_card = params.tokenise_card;
+        if (params.access_token) paymentRequest.access_token = params.access_token;
+        if (params.pay_item_name) paymentRequest.pay_item_name = params.pay_item_name;
+
+        if (params.split_accounts) {
+          try {
+            paymentRequest.split_accounts = JSON.stringify(JSON.parse(params.split_accounts));
+          } catch (err) {
+            console.error('Invalid split_accounts JSON:', err);
+          }
+        }
+
+        const requiredFields = [
+          'pay_item_id',
+          'txn_ref',
+          'amount',
+          'currency',
+          'merchant_code',
+          'mode',
+        ];
+
+        const hasAllRequired = requiredFields.every(field => paymentRequest[field]);
+
+        if (hasAllRequired) {
+          console.log('Starting payment with:', paymentRequest?.split_accounts);
+          window.webpayCheckout(paymentRequest);
+        } else {
+          const missing = requiredFields.filter(f => !paymentRequest[f]);
+          const statusText = document.getElementById('statusText');
+          if (statusText) {
+            statusText.innerText = `Missing required payment parameters: ${missing.join(', ')}`;
+            statusText.style.color = 'red';
+            statusText.style.marginTop = '2rem';
+          }
+        }
+      });
+    </script>
+</body>
+
+</html>
