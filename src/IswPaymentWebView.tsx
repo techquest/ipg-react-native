@@ -5,7 +5,7 @@ import React, {
   useState,
 } from 'react';
 import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
-import { WebView } from 'react-native-webview';
+import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import type {
   IswPaymentWebViewProps,
   IswWebViewRefMethods,
@@ -13,10 +13,10 @@ import type {
 } from './types';
 import { BackDrop } from './Backdrop';
 import {
+  INLINE_CHECKOUT_URL_DEV,
+  INLINE_CHECKOUT_URL_PROD,
   SITE_REDIRECT_URL,
   transactionMessages,
-  WEB_PAY_HOST_DEV,
-  WEB_PAY_HOST_PROD,
 } from './utils';
 
 const IswPaymentWebView: React.ForwardRefRenderFunction<
@@ -95,6 +95,23 @@ const IswPaymentWebView: React.ForwardRefRenderFunction<
     }
   };
 
+  const onMessageHandler = (event: WebViewMessageEvent) => {
+    try {
+      const postMessageResponse = JSON.parse(event.nativeEvent.data);
+
+      if (postMessageResponse.type === 'PAYMENT_RESPONSE') {
+        completeTransaction(postMessageResponse.data as WebCheckoutPayResponse);
+        return;
+      }
+
+      if (postMessageResponse.type === 'PAYMENT_MODAL_TERMINATED') {
+        cancelProcess();
+      }
+    } catch (_error) {
+      // Ignore malformed or unrelated messages from the WebView.
+    }
+  };
+
   if (!payItem?.id || !trnxRef || !amount || !merchantCode || !mode) {
     throw new Error(
       'Missing required payment parameters: pay_item_id, txn_ref, amount, merchant_code, mode'
@@ -138,89 +155,81 @@ const IswPaymentWebView: React.ForwardRefRenderFunction<
     requestParams.split_accounts = splitAccounts;
   }
 
-  const webviewUrl = mode === 'LIVE' ? WEB_PAY_HOST_PROD : WEB_PAY_HOST_DEV;
-  const normalizeRedirectValue = (value: string | null) => {
-    if (!value || value === 'undefined' || value === 'null') {
-      return undefined;
-    }
-
-    return value;
-  };
-
-  const formData = new URLSearchParams({
-    pay_item_id: requestParams.pay_item_id,
-    txn_ref: requestParams.txn_ref,
-    amount: requestParams.amount.toString(),
-    currency: requestParams.currency.toString(),
-    merchant_code: requestParams.merchant_code,
-    mode: requestParams.mode,
+  const scriptUrl =
+    mode === 'LIVE' ? INLINE_CHECKOUT_URL_PROD : INLINE_CHECKOUT_URL_DEV;
+  const paymentRequestJson = JSON.stringify({
+    ...requestParams,
     site_redirect_url: SITE_REDIRECT_URL,
-    payment_response_type: 'GET',
-  });
+    pay_item_name: payItem.name,
+  }).replace(/</g, '\\u003c');
 
-  if (requestParams.cust_name) {
-    formData.append('cust_name', requestParams.cust_name);
-  }
-  if (requestParams.cust_email) {
-    formData.append('cust_email', requestParams.cust_email);
-  }
-  if (requestParams.cust_id) {
-    formData.append('cust_id', requestParams.cust_id);
-  }
-  if (requestParams.cust_mobile_no) {
-    formData.append('cust_mobile_no', requestParams.cust_mobile_no);
-  }
-  if (requestParams.tokenise_card) {
-    formData.append('tokenise_card', requestParams.tokenise_card);
-  }
-  if (requestParams.access_token) {
-    formData.append('access_token', requestParams.access_token);
-  }
-  if (payItem.name) {
-    formData.append('pay_item_name', payItem.name);
-  }
-  if (requestParams.split_accounts) {
-    formData.append(
-      'split_accounts',
-      JSON.stringify(requestParams.split_accounts)
-    );
-  }
+  const bootstrapHtml = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>Interswitch WebPay</title>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      (function () {
+        var paymentRequest = ${paymentRequestJson};
+        var scriptUrl = ${JSON.stringify(scriptUrl)};
 
-  const handleNavigationChange = ({ url }: { url: string }) => {
-    if (!url.startsWith(SITE_REDIRECT_URL)) {
-      return;
-    }
+        function redirectBackToApp() {
+          if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'PAYMENT_MODAL_TERMINATED',
+              data: null
+            }));
+          }
+        }
 
-    const redirectUrl = new URL(url);
-    console.log({ redirectUrl });
+        window.redirectBackToApp = redirectBackToApp;
 
-    const resp = normalizeRedirectValue(redirectUrl.searchParams.get('resp'));
+        function loadScript(src, callback) {
+          var script = document.createElement('script');
+          script.src = src;
+          script.onload = callback;
+          script.onerror = function () {
+            redirectBackToApp();
+          };
+          document.head.appendChild(script);
+        }
 
-    if (!resp) {
-      return;
-    }
+        function paymentCallback(response) {
+          if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'PAYMENT_RESPONSE',
+              data: response
+            }));
+          }
+        }
 
-    const responseAmount =
-      normalizeRedirectValue(redirectUrl.searchParams.get('amount')) ??
-      String(parsedAmount);
-    const responseDesc =
-      normalizeRedirectValue(redirectUrl.searchParams.get('desc')) ??
-      transactionMessages?.[resp];
+        loadScript(scriptUrl, function () {
+          var checkoutRequest = Object.assign({}, paymentRequest, {
+            onComplete: paymentCallback
+          });
 
-    completeTransaction({
-      payRef: '',
-      txnref:
-        normalizeRedirectValue(redirectUrl.searchParams.get('txnref')) ??
-        trnxRef,
-      amount: responseAmount,
-      apprAmt: responseAmount,
-      resp,
-      desc: responseDesc,
-      retRef: '',
-      cardNum: '',
-      mac: '',
-    });
-  };
+          if (!checkoutRequest.pay_item_name) {
+            delete checkoutRequest.pay_item_name;
+          }
+
+          window.webpayCheckout(checkoutRequest);
+        });
+      })();
+    </script>
+  </body>
+</html>`;
 
   return (
     <Modal visible={openModal}>
@@ -234,17 +243,16 @@ const IswPaymentWebView: React.ForwardRefRenderFunction<
       )}
       <WebView
         source={{
-          uri: webviewUrl,
-          method: 'POST',
-          body: formData.toString(),
+          html: bootstrapHtml,
+          baseUrl: 'https://localhost',
         }}
         style={[style.flex, customStyle]}
+        onMessage={onMessageHandler}
         onLoadStart={() => {
           setIsLoading(true);
           setInitializingWebView(false);
         }}
         onLoadEnd={() => setIsLoading(false)}
-        onNavigationStateChange={handleNavigationChange}
         onError={() => {
           setIsLoading(false);
         }}
