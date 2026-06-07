@@ -2,11 +2,10 @@ import React, {
   forwardRef,
   useEffect,
   useImperativeHandle,
-  useRef,
   useState,
 } from 'react';
 import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
-import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+import { WebView } from 'react-native-webview';
 import type {
   IswPaymentWebViewProps,
   IswWebViewRefMethods,
@@ -48,7 +47,6 @@ const IswPaymentWebView: React.ForwardRefRenderFunction<
   const [isLoading, setIsLoading] = useState(false);
   const [openModal, setOpenModal] = useState(false);
   const [initializingWebView, setInitializingWebView] = useState(false);
-  const webViewRef = useRef(null);
 
   useEffect(() => {
     if (autoStart) {
@@ -85,21 +83,15 @@ const IswPaymentWebView: React.ForwardRefRenderFunction<
     },
   }));
 
-  const onMessageHandler = (event: WebViewMessageEvent) => {
-    const postMessageResponse = JSON.parse(event.nativeEvent.data);
-    if (postMessageResponse.type === 'PAYMENT_RESPONSE') {
-      setOpenModal(false);
-      const webCheckoutResponse =
-        postMessageResponse.data as WebCheckoutPayResponse;
-      if (onCompleted) {
-        onCompleted({
-          ...webCheckoutResponse,
-          desc: transactionMessages?.[webCheckoutResponse.resp],
-        });
-      }
-    }
-    if (postMessageResponse.type === 'PAYMENT_MODAL_TERMINATED') {
-      cancelProcess();
+  const completeTransaction = (webCheckoutResponse: WebCheckoutPayResponse) => {
+    setOpenModal(false);
+    if (onCompleted) {
+      onCompleted({
+        ...webCheckoutResponse,
+        desc:
+          webCheckoutResponse.desc ??
+          transactionMessages?.[webCheckoutResponse.resp],
+      });
     }
   };
 
@@ -146,41 +138,89 @@ const IswPaymentWebView: React.ForwardRefRenderFunction<
     requestParams.split_accounts = splitAccounts;
   }
 
-  const queryParams = new URLSearchParams({
+  const webviewUrl = mode === 'LIVE' ? WEB_PAY_HOST_PROD : WEB_PAY_HOST_DEV;
+  const normalizeRedirectValue = (value: string | null) => {
+    if (!value || value === 'undefined' || value === 'null') {
+      return undefined;
+    }
+
+    return value;
+  };
+
+  const formData = new URLSearchParams({
     pay_item_id: requestParams.pay_item_id,
     txn_ref: requestParams.txn_ref,
     amount: requestParams.amount.toString(),
     currency: requestParams.currency.toString(),
     merchant_code: requestParams.merchant_code,
     mode: requestParams.mode,
+    site_redirect_url: SITE_REDIRECT_URL,
+    payment_response_type: 'GET',
   });
 
   if (requestParams.cust_name) {
-    queryParams.append('cust_name', requestParams.cust_name);
+    formData.append('cust_name', requestParams.cust_name);
   }
   if (requestParams.cust_email) {
-    queryParams.append('cust_email', requestParams.cust_email);
+    formData.append('cust_email', requestParams.cust_email);
   }
   if (requestParams.cust_id) {
-    queryParams.append('cust_id', requestParams.cust_id);
+    formData.append('cust_id', requestParams.cust_id);
   }
   if (requestParams.cust_mobile_no) {
-    queryParams.append('cust_mobile_no', requestParams.cust_mobile_no);
+    formData.append('cust_mobile_no', requestParams.cust_mobile_no);
   }
   if (requestParams.tokenise_card) {
-    queryParams.append('tokenise_card', requestParams.tokenise_card);
+    formData.append('tokenise_card', requestParams.tokenise_card);
   }
   if (requestParams.access_token) {
-    queryParams.append('access_token', requestParams.access_token);
+    formData.append('access_token', requestParams.access_token);
+  }
+  if (payItem.name) {
+    formData.append('pay_item_name', payItem.name);
   }
   if (requestParams.split_accounts) {
-    queryParams.append(
+    formData.append(
       'split_accounts',
       JSON.stringify(requestParams.split_accounts)
     );
   }
-  const WEB_PAY_HOST = mode === 'LIVE' ? WEB_PAY_HOST_PROD : WEB_PAY_HOST_DEV;
-  const webviewUrl = `${WEB_PAY_HOST}?${queryParams.toString()}`;
+
+  const handleNavigationChange = ({ url }: { url: string }) => {
+    if (!url.startsWith(SITE_REDIRECT_URL)) {
+      return;
+    }
+
+    const redirectUrl = new URL(url);
+    console.log({ redirectUrl });
+
+    const resp = normalizeRedirectValue(redirectUrl.searchParams.get('resp'));
+
+    if (!resp) {
+      return;
+    }
+
+    const responseAmount =
+      normalizeRedirectValue(redirectUrl.searchParams.get('amount')) ??
+      String(parsedAmount);
+    const responseDesc =
+      normalizeRedirectValue(redirectUrl.searchParams.get('desc')) ??
+      transactionMessages?.[resp];
+
+    completeTransaction({
+      payRef: '',
+      txnref:
+        normalizeRedirectValue(redirectUrl.searchParams.get('txnref')) ??
+        trnxRef,
+      amount: responseAmount,
+      apprAmt: responseAmount,
+      resp,
+      desc: responseDesc,
+      retRef: '',
+      cardNum: '',
+      mac: '',
+    });
+  };
 
   return (
     <Modal visible={openModal}>
@@ -193,15 +233,18 @@ const IswPaymentWebView: React.ForwardRefRenderFunction<
         </View>
       )}
       <WebView
-        source={{ uri: webviewUrl }}
-        ref={webViewRef}
-        onMessage={onMessageHandler}
+        source={{
+          uri: webviewUrl,
+          method: 'POST',
+          body: formData.toString(),
+        }}
         style={[style.flex, customStyle]}
         onLoadStart={() => {
           setIsLoading(true);
           setInitializingWebView(false);
         }}
         onLoadEnd={() => setIsLoading(false)}
+        onNavigationStateChange={handleNavigationChange}
         onError={() => {
           setIsLoading(false);
         }}
