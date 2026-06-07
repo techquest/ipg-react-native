@@ -139,9 +139,10 @@ export const transactionMessages: Record<string, string> = {
   '20050': 'Wrong hash computation.',
 };
 
-export const WEB_PAY_HOST_DEV = 'https://isw-inline-checkout-webview.k8.isw.la';
+export const INLINE_CHECKOUT_URL_DEV =
+  'https://newwebpay-sandbox.interswitchng.com/inline-checkout.js';
 
-export const WEB_PAY_HOST_PROD =
-  'https://isw-inline-checkout-webview.k8.isw.la';
+export const INLINE_CHECKOUT_URL_PROD =
+  'https://newwebpay.interswitchng.com/inline-checkout.js';
 
 export const SITE_REDIRECT_URL = 'https://blank.org';
